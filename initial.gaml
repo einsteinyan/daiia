@@ -124,7 +124,15 @@ species people skills: [fipa, moving] {
 	bool hasTarget <- false;
 	bool atTarget <- false;
 	bool goalAchieved <- false;
+	bool isInteracting <- false;
+	bool isWandering <- false;
+	bool alternateDestination <- false;
+	bool decidedStayLength <- false;
 	int stayTime <- 25;
+	int wanderingTime <- 50;
+	list<shop> shopsList;
+	float lowestPrice <- 1.0;
+	bool buyItem <- false;
 	
 	float musicTaste <- rnd(float(1));
 	float sociability <- rnd(float(1));
@@ -132,35 +140,119 @@ species people skills: [fipa, moving] {
 	
 	float eatQuotient <- rnd(float(1));
 	float drinkQuotient <- rnd(float(1));
+	float goalQuotient <- rnd(float(1));
+	string currentGoal <- nil;
 	
 	float fullfillment <- 0.0;
 	
 	init {
+		shopsList <- list(shop);
 		totalFullfillment <- totalFullfillment + fullfillment; 
 	}
 	
+	action resetVal {
+		
+	}
+	
 	reflex decide when: !hasTarget {
-		if (type = 'Cop' or type = 'Thief') {
-			do wander speed: 5.0;
-		}
-		else if (type = 'ConcertGoer'){
-			targetPoint <- concertLocation;
-			hasTarget <- true;
-		}
-		else if (type = 'partyGoer'){
-			targetPoint <- eatQuotient > drinkQuotient ? restaurantLocation : barLocation;
-			hasTarget <- true;
+		if(!alternateDestination) {
+			if (type = 'Cop' or type = 'Thief') {
+				do wander speed: 5.0;
+				currentGoal <- 'wander';
+			}
+			else if (type = 'ConcertGoer'){
+				targetPoint <- concertLocation;
+				hasTarget <- true;
+				currentGoal <- 'goto_concert';
+			}
+			else if (type = 'partyGoer'){
+				targetPoint <- eatQuotient > drinkQuotient ? restaurantLocation : barLocation;
+				hasTarget <- true;
+				currentGoal <- 'goto_party';
+			}
+			else {
+				int randomShop <- rnd(2);
+				targetPoint <- shopLocation at randomShop;
+				hasTarget <- true;
+				currentGoal <- 'goto_shop';
+			}	
 		}
 		else {
-			int randomShop <- rnd(2);
-			targetPoint <- shopLocation at randomShop;
-			hasTarget <- true;
+//			if (type = 'Cop' or type = 'Thief') {
+//				do wander speed: 5.0;
+//				currentGoal <- 'wander';
+//			}
+//			else if (type = 'ConcertGoer'){
+//				targetPoint <- concertLocation;
+//				hasTarget <- true;
+//				currentGoal <- 'goto_concert';
+//			}
+//			else if (type = 'partyGoer'){
+//				targetPoint <- eatQuotient > drinkQuotient ? restaurantLocation : barLocation;
+//				hasTarget <- true;
+//				currentGoal <- 'goto_party';
+//			}
+//			else {
+//				int randomShop <- rnd(2);
+//				targetPoint <- shopLocation at randomShop;
+//				hasTarget <- true;
+//				currentGoal <- 'goto_shop';
+//			}	
+
+			if (type = 'ConcertGoer'){
+				if(sociability > 0.5) {
+					targetPoint <- eatQuotient > drinkQuotient ? restaurantLocation : barLocation;
+					hasTarget <- true;
+					currentGoal <- goalQuotient > 0.5 ? 'goto_party' : 'socialise';  
+				}
+				else {
+					if (money > 0.5) {
+						int randomShop <- rnd(2);
+						targetPoint <- shopLocation at randomShop;
+						hasTarget <- true;
+						currentGoal <- goalQuotient > 0.5 ? 'goto_shop' : 'socialise';
+					}
+					else {
+//						do wander;
+						currentGoal <- goalQuotient > 0.5 ? 'goto_eat' : 'socialise';
+						hasTarget <- true;
+					}
+				}
+			}
+			else if (type = 'partyGoer'){
+				if(musicTaste > 0.5) {
+					targetPoint <- concertLocation;
+					hasTarget <- true;
+					currentGoal <- goalQuotient > 0.5 ? 'goto_party' : 'socialise';
+				}
+				else {
+					if (money > 0.5) {
+						int randomShop <- rnd(2);
+						targetPoint <- shopLocation at randomShop;
+						hasTarget <- true;
+						currentGoal <- goalQuotient > 0.5 ? 'goto_shop' : 'socialise';
+					} 
+					else {
+//						do wander;
+						hasTarget <- true;
+					}
+				}
+			}
+			else if (type = 'shopper'){
+				if(musicTaste > 0.5) {
+					targetPoint <- concertLocation;
+					hasTarget <- true;
+					currentGoal <- goalQuotient > 0.5 ? 'goto_concert' : 'socialise';
+				}
+				else {
+					targetPoint <- eatQuotient > drinkQuotient ? restaurantLocation : barLocation;
+					hasTarget <- true;
+					currentGoal <- goalQuotient > 0.5 ? 'goto_party' : 'socialise';
+				}
+			}	
 		}
 	}
 	
-	reflex interactWithOthers when: goalAchieved {
-		
-	}
 	
 	reflex moveToTarget when: hasTarget {
 		if (location distance_to(targetPoint) > 5) {
@@ -173,7 +265,163 @@ species people skills: [fipa, moving] {
 	}
 	
 	reflex wanderAway when: goalAchieved {
-		do wander speed: 20.0;
+		if (wanderingTime > 0) {
+			do wander speed: 20.0;
+			wanderingTime <- wanderingTime - 1;	
+		}	
+		else {
+			// Reset flags 
+			goalAchieved <- false;
+			hasTarget <- false;
+			atTarget <- false;
+			stayTime <- 25;
+			wanderingTime <- 50;
+			alternateDestination <- true;
+		}
+	}
+	
+	
+	
+	reflex beginInteracting when: atTarget and currentGoal = 'socialise' {
+		list neighbours <- (self neighbors_at 5) of_species (species (self));
+		if(!empty(neighbours)) {
+			loop person over: neighbours {
+				if(person.sociability > 0.5) {
+					person.myColor <- #red;
+					person.isInteracting <- true;
+					person.atTarget <- false;
+					person.fullfillment <- person.fullfillment + 0.1;
+				}			
+			}
+			if (sociability > 0.5) {				
+				myColor <- #red;
+				isInteracting <- true;
+				atTarget <- false;	
+				fullfillment <- fullfillment + 0.1;
+			}
+		}
+	}
+	
+	reflex interactWithOthers when: isInteracting {
+		if(stayTime > 0) {
+//			agent closestAgent <- agent_closest_to(self);
+			if (type = 'ConcertGoer') {
+				write name + "is interacting";
+			}
+			else if (type = 'partyGoer') {
+				write name + "is interacting";
+			}
+			else if (type = 'shopper') {
+				write name + "is interacting";
+			}	
+			stayTime <- stayTime - 1;
+		}
+		else {
+			goalAchieved <- false;
+			hasTarget <- false;
+			atTarget <- false;
+			stayTime <- 25;
+			wanderingTime <- 50;
+//			alternateGoal <- true;
+			isInteracting <- false;
+		}
+	}
+
+	//	Things to do in the concert
+	reflex checkCrowd when: currentGoal = 'goto_concert' and atTarget and !decidedStayLength {
+		agent closestAgent <- agent_closest_to(self);
+		ask closestAgent {
+			if (abs(myself.musicTaste - musicTaste) < 0.2) {
+				myself.stayTime <- 50;
+				stayTime <- 50;
+				write myself.name + " and " + name + " will stay longer at the concert.";
+			} 
+		}
+		decidedStayLength <- true;
+		fullfillment <- fullfillment + 0.1;
+	}
+	
+	reflex enjoyConcert when: currentGoal = 'goto_concert' and atTarget and decidedStayLength {
+		do wander;
+		if (stayTime > 0) {
+			stayTime <- stayTime - 1;	
+		}
+		else {
+			decidedStayLength <- false;
+			fullfillment <- fullfillment + 0.1;
+			goalAchieved <- true;
+		}
+	}
+	
+	//	Things to do in the party	
+	reflex socialise when: (currentGoal = 'goto_party' and atTarget and sociability > 0.5) {
+		do wander;
+		agent closestAgent <- agent_closest_to(self);
+		ask closestAgent {
+			if (sociability > 0.75) {
+				string place <- myself.eatQuotient > myself.drinkQuotient ? 'bar' : 'restaurant';
+				write myself.name + " is partying with " + name + " at the " + place;
+				fullfillment <- fullfillment + 0.1;
+			} 
+		}	
+	}
+	
+	reflex buySomething when: (currentGoal = 'goto_party' and atTarget and sociability < 0.5 and money > 0.5) {
+		money <- money - rnd(money*0.5);
+		goalAchieved <- true;
+		if (eatQuotient > drinkQuotient) {
+			eatQuotient <- eatQuotient - rnd(eatQuotient);
+			write "Bought something to eat at restaurant.";
+		}
+		else {
+			drinkQuotient <- drinkQuotient - rnd(drinkQuotient);
+			write "Bought something to drink at bar.";
+		}
+	} 
+	
+	reflex buySomething when: (currentGoal = 'goto_party' and atTarget and sociability < 0.5 and money < 0.5) {
+		if (stayTime > 0) {
+			do wander;
+			stayTime <- stayTime - 1;	
+		}
+		else {
+			goalAchieved <- true;
+			fullfillment <- fullfillment + 0.1;
+		}
+	}
+	
+	//	Things to do while shopping 
+	
+	reflex goShopping when: currentGoal = 'goto_shop' and empty(proposes) and atTarget and money > 0.5 {
+		do start_conversation(to: shopsList, protocol: 'fipa-contract-net', performative: 'cfp', contents: [self]);
+	}
+	
+	reflex getPrices when: (!empty(proposes)) {
+		loop p over: proposes {
+			list contents <- p.contents;
+			float proposedPrice <- float(contents at 0);
+//			write shop(p.sender).name + " has proposed " + proposedPrice + " " + name;
+			lowestPrice <- proposedPrice < lowestPrice ? proposedPrice : lowestPrice;
+		}
+		buyItem <- true;
+	}
+	
+	reflex buyItem when: buyItem and !goalAchieved {
+		money <- money - lowestPrice;
+		write name + " has bought at item for " + lowestPrice;
+		goalAchieved <- true;
+		fullfillment <- fullfillment + 0.1;
+	}
+	
+	reflex chatWithShoppers when: currentGoal = 'goto_shop' and atTarget and money < 0.5 {
+		if (stayTime > 0) {
+			do wander;
+			stayTime <- stayTime - 1;	
+		}
+		else {
+			goalAchieved <- true;
+			fullfillment <- fullfillment + 0.1;
+		}
 	}
 	
 	aspect default {
@@ -198,104 +446,16 @@ species thief parent: people skills: [fipa, moving] {
 species concertGoer parent: people skills: [fipa, moving] {
 	rgb color <- #lightcoral;
 	string type <- 'ConcertGoer';
-	bool decidedStayLength <- false;
-	
-	reflex checkCrowd when: atTarget and !decidedStayLength {
-		agent closestAgent <- agent_closest_to(self);
-		ask closestAgent {
-			if (abs(myself.musicTaste - musicTaste) < 0.2) {
-				myself.stayTime <- 50;
-				stayTime <- 50;
-//				write myself.name + name + "found a musicmate";
-			} 
-		}
-		decidedStayLength <- true;
-		fullfillment <- fullfillment + 0.1;
-	}
-	
-	reflex enjoyConcert when: atTarget and decidedStayLength {
-		do wander;
-		if (stayTime > 0) {
-			stayTime <- stayTime - 1;	
-		}
-		else {
-			fullfillment <- fullfillment + 0.1;
-			goalAchieved <- true;
-		}
-	}
 }
 
 species partyGoer parent: people skills: [fipa, moving] {
 	rgb color <- #lightgreen;
 	string type <- 'partyGoer';
-	
-	reflex socialise when: (atTarget and sociability > 0.5) {
-		do wander;
-		agent closestAgent <- agent_closest_to(self);
-		ask closestAgent {
-			if (sociability > 0.75) {
-				write myself.name + name + "Found someone to hangout with";
-				fullfillment <- fullfillment + 0.1;
-			} 
-		}	
-	}
-	
-	reflex buySomething when: (atTarget and sociability < 0.5 and money > 0.5) {
-		money <- money - rnd(money);
-		goalAchieved <- true;
-		if (eatQuotient > drinkQuotient) {
-			eatQuotient <- eatQuotient - rnd(eatQuotient);
-			write "Bought something to eat at restaurant.";
-		}
-		else {
-			drinkQuotient <- drinkQuotient - rnd(drinkQuotient);
-			write "Bought something to drink at bar.";
-		}
-	} 
 }
 
 species shopper parent: people skills: [fipa, moving] {
-	rgb color <- #lightyellow;
+	rgb color <- #yellow;
 	string type <- 'shopper';
-	list<shop> shopsList;
-	float lowestPrice <- 1.0;
-	bool buyItem <- false;
-	
-	init {
-		shopsList <- list(shop);
-	}
-	
-	reflex goShopping when: empty(proposes) and atTarget and money > 0.5 {
-		do start_conversation(to: shopsList, protocol: 'fipa-contract-net', performative: 'cfp', contents: [self]);
-	}
-	
-	reflex getPrices when: (!empty(proposes)) {
-		loop p over: proposes {
-			list contents <- p.contents;
-			float proposedPrice <- float(contents at 0);
-//			write shop(p.sender).name + " has proposed " + proposedPrice + " " + name;
-			lowestPrice <- proposedPrice < lowestPrice ? proposedPrice : lowestPrice;
-		}
-		buyItem <- true;
-	}
-	
-	reflex buyItem when: buyItem and !goalAchieved {
-		money <- money - lowestPrice;
-		write name + " has bought at item for " + lowestPrice;
-		goalAchieved <- true;
-		fullfillment <- fullfillment + 0.1;
-	}
-	
-	reflex chatWithShoppers when: atTarget and money < 0.5 {
-		if (stayTime > 0) {
-			do wander;
-			stayTime <- stayTime - 1;	
-		}
-		else {
-			goalAchieved <- true;
-			fullfillment <- fullfillment + 0.1;
-		}
-	}
 }
 
 experiment simulation type: gui {
