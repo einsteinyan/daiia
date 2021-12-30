@@ -18,14 +18,17 @@ global {
 	int numberOfShops <- 3;
 	int numberOfCops <- 5;
 	int numberOfTheives <- 5;
+	int numberOfAtms <- 1;
 	
 	point concertLocation <- {50, 50};
 	point barLocation <- {50, 25};
 	point restaurantLocation <- {50, 75};
 	list<point> shopLocation <- [{25, 50}, {25, 40}, {25, 60}];
+	point atmLocation <- {75, 50};
 	int i <- 0;
 	
 	float totalFullfillment <- 0.0;
+	float totalMoney <- 0.0;
 	
 	float copFullfillment <- 0.0;
 	float thiefFullfillment <- 0.0;
@@ -47,6 +50,9 @@ global {
 			location <- shopLocation at i;
 			i <- i+1;
 		}
+		create atm number: numberOfAtms {
+			location <- atmLocation;
+		}
 		create concertGoer number: numberOfPeople {
 			location <- {rnd(100), rnd(100)};
 		}
@@ -67,7 +73,6 @@ global {
 
 
 species bar skills: [fipa] {
-	string typeBar;
 	rgb colorBar <- #green;
 	
 	//draw bar
@@ -79,7 +84,6 @@ species bar skills: [fipa] {
 }
 
 species concert skills: [fipa] {
-	string typeBar;
 	rgb colorBar <- #coral;
 	
 	//draw bar
@@ -91,7 +95,6 @@ species concert skills: [fipa] {
 }
 
 species restaurant skills: [fipa] {
-	string typeBar;
 	rgb colorBar <- #green;
 	
 	//draw bar
@@ -103,7 +106,6 @@ species restaurant skills: [fipa] {
 }
 
 species shop skills: [fipa] {
-	string typeBar;
 	rgb colorBar <- #yellow;
 	
 	reflex communicatePrices when: !empty(cfps) {
@@ -121,6 +123,14 @@ species shop skills: [fipa] {
 	
 }
 
+species atm skills: [fipa] {
+	rgb colorBar <- #black;
+	
+	aspect default {
+		draw square(3) color: colorBar;	
+	}
+}
+
 species people skills: [fipa, moving] {
 	rgb myColor <- #black;
 	rgb color <- #darkslategrey;
@@ -131,7 +141,6 @@ species people skills: [fipa, moving] {
 	bool atTarget <- false;
 	bool goalAchieved <- false;
 	bool isInteracting <- false;
-	bool isWandering <- false;
 	bool alternateDestination <- false;
 	bool decidedStayLength <- false;
 	int stayTime <- 25;
@@ -139,6 +148,7 @@ species people skills: [fipa, moving] {
 	list<shop> shopsList;
 	float lowestPrice <- 1.0;
 	bool buyItem <- false;
+	bool shouldReset <- false;
 	
 	float musicTaste <- rnd(float(1));
 	float sociability <- rnd(float(1));
@@ -147,20 +157,31 @@ species people skills: [fipa, moving] {
 	float eatQuotient <- rnd(float(1));
 	float drinkQuotient <- rnd(float(1));
 	float goalQuotient <- rnd(float(1));
-	string currentGoal <- nil;
+	string currentGoal <- 'find_purpose';
 	
 	float fullfillment <- 0.0;
 	
 	init {
 		shopsList <- list(shop);
 		totalFullfillment <- totalFullfillment + fullfillment; 
+		totalMoney <- totalMoney + money;
 	}
 	
-	action resetVal {
-		
+	reflex resetPerson when: shouldReset {
+		targetPoint <- nil;
+		hasTarget <- false;
+		atTarget <- false;
+		goalAchieved <- false;
+		alternateDestination <- true;
+		decidedStayLength <- false;
+		stayTime <- 25;
+		wanderingTime <- 50;
+		lowestPrice <- 1.0;
+		currentGoal <- 'find_purpose';
+		shouldReset <- false;
 	}
 	
-	reflex decide when: !hasTarget {
+	reflex decide when: currentGoal = 'find_purpose' {
 		if(!alternateDestination) {
 			if (type = 'Cop' or type = 'Thief') {
 				do wander speed: 5.0;
@@ -184,6 +205,7 @@ species people skills: [fipa, moving] {
 			}	
 		}
 		else {
+//			// Go back to same destinations
 //			if (type = 'Cop' or type = 'Thief') {
 //				do wander speed: 5.0;
 //				currentGoal <- 'wander';
@@ -204,7 +226,8 @@ species people skills: [fipa, moving] {
 //				hasTarget <- true;
 //				currentGoal <- 'goto_shop';
 //			}	
-
+			
+			// Go back to different destinations, with different intent
 			if (type = 'ConcertGoer'){
 				if(sociability > 0.5) {
 					targetPoint <- eatQuotient > drinkQuotient ? restaurantLocation : barLocation;
@@ -219,8 +242,8 @@ species people skills: [fipa, moving] {
 						currentGoal <- goalQuotient > 0.5 ? 'goto_shop' : 'socialise';
 					}
 					else {
-//						do wander;
-						currentGoal <- goalQuotient > 0.5 ? 'goto_eat' : 'socialise';
+						targetPoint <- atmLocation;
+						currentGoal <- 'goto_atm';
 						hasTarget <- true;
 					}
 				}
@@ -240,6 +263,8 @@ species people skills: [fipa, moving] {
 					} 
 					else {
 //						do wander;
+						targetPoint <- atmLocation;
+						currentGoal <- 'goto_atm';
 						hasTarget <- true;
 					}
 				}
@@ -263,7 +288,7 @@ species people skills: [fipa, moving] {
 	reflex moveToTarget when: hasTarget {
 		if (location distance_to(targetPoint) > 5) {
 			do goto target: targetPoint;
-			speed <- 2.0;	
+			speed <- 5.0;	
 		}
 		else {
 			atTarget <- true;
@@ -277,15 +302,12 @@ species people skills: [fipa, moving] {
 		}	
 		else {
 			// Reset flags 
-			goalAchieved <- false;
-			hasTarget <- false;
-			atTarget <- false;
-			stayTime <- 25;
-			wanderingTime <- 50;
-			alternateDestination <- true;
+			myColor <- color;
+			color <- #white;
+			write "Goal achieved for " + name + ", moving on to do something else.";
+			shouldReset <- true;
 		}
 	}
-	
 	
 	
 	reflex beginInteracting when: atTarget and currentGoal = 'socialise' {
@@ -321,17 +343,28 @@ species people skills: [fipa, moving] {
 				write name + "is interacting";
 			}	
 			stayTime <- stayTime - 1;
+			totalFullfillment <- totalFullfillment + 0.1;
 		}
 		else {
-			goalAchieved <- false;
-			hasTarget <- false;
-			atTarget <- false;
-			stayTime <- 25;
-			wanderingTime <- 50;
-//			alternateGoal <- true;
+			goalAchieved <- true;
 			isInteracting <- false;
 		}
 	}
+	
+	// Withdraw money
+	
+	reflex withdrawMoney when: currentGoal = 'goto_atm' and atTarget and !goalAchieved{
+		if (stayTime > 0) {
+			totalMoney <- totalMoney - money;
+			money <- rnd(0.8, float(1));
+			totalMoney <- totalMoney + money;
+			stayTime <- stayTime -1;	
+		}
+		else {
+			write name + " is done withdrawing money. Going for a walk.";
+			goalAchieved <- true;
+		}
+	}	
 
 	//	Things to do in the concert
 	reflex checkCrowd when: currentGoal = 'goto_concert' and atTarget and !decidedStayLength {
@@ -348,30 +381,38 @@ species people skills: [fipa, moving] {
 		totalFullfillment <- totalFullfillment + concertGoerFullfillment;
 	}
 	
-	reflex enjoyConcert when: currentGoal = 'goto_concert' and atTarget and decidedStayLength {
-		do wander;
+	reflex enjoyConcert when: currentGoal = 'goto_concert' and atTarget and decidedStayLength and !goalAchieved{
 		if (stayTime > 0) {
+			do wander;
 			stayTime <- stayTime - 1;	
 		}
 		else {
-			decidedStayLength <- false;
 			fullfillment <- fullfillment + 0.1;
 			goalAchieved <- true;
+			write name + " is done with the concert, going for a walk.";
 		}
 	}
 	
 	//	Things to do in the party	
-	reflex socialise when: (currentGoal = 'goto_party' and atTarget and sociability > 0.5) {
-		do wander;
-		agent closestAgent <- agent_closest_to(self);
-		ask closestAgent {
-			if (sociability > 0.75) {
-				string place <- myself.eatQuotient > myself.drinkQuotient ? 'bar' : 'restaurant';
-				write myself.name + " is partying with " + name + " at the " + place;
-				partyGoerFullfillment <- partyGoerFullfillment + 0.1;
-				totalFullfillment <- totalFullfillment + partyGoerFullfillment;
-			} 
-		}	
+	reflex socialise when: (currentGoal = 'goto_party' and atTarget and sociability > 0.5 and !goalAchieved) {
+		if (stayTime > 0) {
+			do wander;
+			agent closestAgent <- agent_closest_to(self);
+			ask closestAgent {
+				if (sociability > 0.75) {
+					string place <- myself.eatQuotient > myself.drinkQuotient ? 'bar' : 'restaurant';
+					write myself.name + " is partying with " + name + " at the " + place;
+					partyGoerFullfillment <- partyGoerFullfillment + 0.1;
+					totalFullfillment <- totalFullfillment + partyGoerFullfillment;
+				} 
+			}	
+			stayTime <- stayTime - 1;	
+		}
+		else {
+			goalAchieved <- true;
+			fullfillment <- fullfillment + 0.1;
+		}
+
 	}
 	
 	reflex buySomething when: (currentGoal = 'goto_party' and atTarget and sociability < 0.5 and money > 0.5) {
@@ -387,7 +428,7 @@ species people skills: [fipa, moving] {
 		}
 	} 
 	
-	reflex buySomething when: (currentGoal = 'goto_party' and atTarget and sociability < 0.5 and money < 0.5) {
+	reflex partyAround when: (currentGoal = 'goto_party' and atTarget and sociability < 0.5 and money < 0.5 and !goalAchieved) {
 		if (stayTime > 0) {
 			do wander;
 			stayTime <- stayTime - 1;	
@@ -414,15 +455,16 @@ species people skills: [fipa, moving] {
 		buyItem <- true;
 	}
 	
-	reflex buyItem when: buyItem and !goalAchieved {
+	reflex buyItem when: buyItem and !goalAchieved and atTarget and currentGoal = 'goto_shop' {
 		money <- money - lowestPrice;
 		write name + " has bought at item for " + lowestPrice;
+		buyItem <- false;
 		goalAchieved <- true;
 		fullfillment <- fullfillment + 0.1;
 		totalFullfillment <- totalFullfillment + fullfillment;
 	}
 	
-	reflex chatWithShoppers when: currentGoal = 'goto_shop' and atTarget and money < 0.5 {
+	reflex chatWithShoppers when: currentGoal = 'goto_shop' and atTarget and money < 0.5 and !goalAchieved {
 		if (stayTime > 0) {
 			do wander;
 			stayTime <- stayTime - 1;	
@@ -505,17 +547,19 @@ experiment simulation type: gui {
 			species concertGoer;
 			species partyGoer;
 			species shopper;
+			species atm;
 		}
 		monitor "Overall fullfillment" value: totalFullfillment;
-		display simInformation refresh: every(100#cycles) {
+		display simInformation refresh: every(10#cycles) {
 			chart "Global fullfillment" type: series size:{1, 0.5} position: {0, 0} {
 				data "Fullfillment" value: totalFullfillment color: #blue;
+				data "total_money_of_guests" value: totalMoney color: #darkgoldenrod;
 				
-				data "CopFullfillment" value: copFullfillment color: #red;
-				data "ThiefFullfillment" value: thiefFullfillment color: #black;
-				data "PartyGoerFullfillment" value: partyGoerFullfillment color: #orange;
-				data "ConcertGoerFullfillment" value: concertGoerFullfillment color: #green;
-				data "ShopperFullfillment" value: shopperFullfillment color: #yellow;
+//				data "CopFullfillment" value: copFullfillment color: #red;
+//				data "ThiefFullfillment" value: thiefFullfillment color: #black;
+//				data "PartyGoerFullfillment" value: partyGoerFullfillment color: #orange;
+//				data "ConcertGoerFullfillment" value: concertGoerFullfillment color: #green;
+//				data "ShopperFullfillment" value: shopperFullfillment color: #yellow;
 			}
 		}
 	}
