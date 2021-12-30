@@ -185,6 +185,7 @@ species people skills: [fipa, moving] {
 		if(!alternateDestination) {
 			if (type = 'Cop' or type = 'Thief') {
 				do wander speed: 5.0;
+				write 'wanderiiiiiiiiiiiiiiiiiing!';
 				currentGoal <- 'wander';
 			}
 			else if (type = 'ConcertGoer'){
@@ -297,13 +298,13 @@ species people skills: [fipa, moving] {
 	
 	reflex wanderAway when: goalAchieved {
 		if (wanderingTime > 0) {
-			do wander speed: 20.0;
+			do wander speed: 6.0;
 			wanderingTime <- wanderingTime - 1;	
 		}	
 		else {
 			// Reset flags 
-			myColor <- color;
-			color <- #white;
+			// myColor <- color;
+			// color <- #white;
 			write "Goal achieved for " + name + ", moving on to do something else.";
 			shouldReset <- true;
 		}
@@ -487,16 +488,21 @@ species cop parent: people skills: [fipa, moving] {
 	rgb color <- #lightskyblue;
 	rgb myColor <- #blue;
 	string type <- 'Cop';
+	float thiefSeen <- 0.0;
+	bool thiefCought <- false;
 	
 	reflex SearchThief when: true {
+		do wander amplitude:5.0;
 		agent closestAgent <- agent_closest_to(self);
 		ask closestAgent {
-			if (type = 'Thief'){
+			if (type = 'Thief') and (location distance_to(myself.location) < 3){
 				write myself.name + name + "found a thief";
+				thiefCought <- true;
+				myself.thiefSeen <- myself.thiefSeen + 1;
+				copFullfillment <- copFullfillment + 0.1;
+				totalFullfillment <- totalFullfillment + copFullfillment;
 			}
 		}
-		copFullfillment <- copFullfillment + 0.1;
-		totalFullfillment <- totalFullfillment + copFullfillment;
 	}
 }
 
@@ -505,8 +511,10 @@ species thief parent: people skills: [fipa, moving] {
 	rgb myColor <- #orangered;
 	float money_stolen <- 0.0;
 	string type <- 'Thief';
+	bool thiefCought <- false;
 	
 	reflex Steal when: true {
+		do wander amplitude:5.0;
 		agent closestAgent <- agent_closest_to(self);
 		ask closestAgent {
 			if (location distance_to(myself.location) < 1) and not (type = 'Cop') and not (type = 'Thief'){
@@ -517,6 +525,11 @@ species thief parent: people skills: [fipa, moving] {
 				totalFullfillment <- totalFullfillment + thiefFullfillment;
 			}
 		}
+	}
+	
+	reflex Die when: thiefCought {
+		thiefCought <- false;
+		do die;
 	}
 }
 
