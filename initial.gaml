@@ -27,6 +27,12 @@ global {
 	
 	float totalFullfillment <- 0.0;
 	
+	float copFullfillment <- 0.0;
+	float thiefFullfillment <- 0.0;
+	float concertGoerFullfillment <- 0.0;
+	float partyGoerFullfillment <- 0.0;
+	float shopperFullfillment <- 0.0;
+	
 	init {
 		create bar number: numberOfBars {
 			location <- barLocation;
@@ -148,7 +154,7 @@ species people skills: [fipa, moving] {
 			hasTarget <- true;
 		}
 		else if (type = 'partyGoer'){
-			targetPoint <- eatQuotient > drinkQuotient ? restaurantLocation : barLocation;
+			targetPoint <- eatQuotient > drinkQuotient ? restaurantLocation : barLocation; // line???
 			hasTarget <- true;
 		}
 		else {
@@ -165,7 +171,7 @@ species people skills: [fipa, moving] {
 	reflex moveToTarget when: hasTarget {
 		if (location distance_to(targetPoint) > 5) {
 			do goto target: targetPoint;
-			speed <- 3.0;	
+			speed <- 2.0;	
 		}
 		else {
 			atTarget <- true;
@@ -173,7 +179,7 @@ species people skills: [fipa, moving] {
 	}
 	
 	reflex wanderAway when: goalAchieved {
-		do wander speed: 20.0;
+		do wander speed: 5.0;
 	}
 	
 	aspect default {
@@ -187,12 +193,37 @@ species cop parent: people skills: [fipa, moving] {
 	rgb color <- #lightskyblue;
 	rgb myColor <- #blue;
 	string type <- 'Cop';
+	
+	reflex SearchThief when: true {
+		agent closestAgent <- agent_closest_to(self);
+		ask closestAgent {
+			if (type = 'Thief'){
+				write myself.name + name + "found a thief";
+			}
+		}
+		copFullfillment <- copFullfillment + 0.1;
+		totalFullfillment <- totalFullfillment + copFullfillment;
+	}
 }
 
 species thief parent: people skills: [fipa, moving] {
 	rgb color <- #orange;
 	rgb myColor <- #orangered;
+	float money_stolen <- 0.0;
 	string type <- 'Thief';
+	
+	reflex Steal when: true {
+		agent closestAgent <- agent_closest_to(self);
+		ask closestAgent {
+			if (location distance_to(myself.location) < 1) and not (type = 'Cop') and not (type = 'Thief'){
+				write myself.name + name + "steal a guest";
+				money <- money - 0.1;
+				myself.money_stolen <- myself.money_stolen + 0.1;
+				thiefFullfillment <- thiefFullfillment + 0.1;
+				totalFullfillment <- totalFullfillment + thiefFullfillment;
+			}
+		}
+	}
 }
 
 species concertGoer parent: people skills: [fipa, moving] {
@@ -206,11 +237,12 @@ species concertGoer parent: people skills: [fipa, moving] {
 			if (abs(myself.musicTaste - musicTaste) < 0.2) {
 				myself.stayTime <- 50;
 				stayTime <- 50;
-//				write myself.name + name + "found a musicmate";
-			} 
+				write myself.name + name + "found a musicmate";
+			}
 		}
 		decidedStayLength <- true;
-		fullfillment <- fullfillment + 0.1;
+		concertGoerFullfillment <- concertGoerFullfillment + 0.1;
+		totalFullfillment <- totalFullfillment + concertGoerFullfillment;
 	}
 	
 	reflex enjoyConcert when: atTarget and decidedStayLength {
@@ -235,7 +267,8 @@ species partyGoer parent: people skills: [fipa, moving] {
 		ask closestAgent {
 			if (sociability > 0.75) {
 				write myself.name + name + "Found someone to hangout with";
-				fullfillment <- fullfillment + 0.1;
+				partyGoerFullfillment <- partyGoerFullfillment + 0.1;
+				totalFullfillment <- totalFullfillment + partyGoerFullfillment;
 			} 
 		}	
 	}
@@ -284,6 +317,7 @@ species shopper parent: people skills: [fipa, moving] {
 		write name + " has bought at item for " + lowestPrice;
 		goalAchieved <- true;
 		fullfillment <- fullfillment + 0.1;
+		totalFullfillment <- totalFullfillment + fullfillment;
 	}
 	
 	reflex chatWithShoppers when: atTarget and money < 0.5 {
@@ -293,7 +327,8 @@ species shopper parent: people skills: [fipa, moving] {
 		}
 		else {
 			goalAchieved <- true;
-			fullfillment <- fullfillment + 0.1;
+			shopperFullfillment <- shopperFullfillment + 0.1;
+			totalFullfillment <- totalFullfillment + shopperFullfillment;
 		}
 	}
 }
@@ -315,6 +350,12 @@ experiment simulation type: gui {
 		display simInformation refresh: every(100#cycles) {
 			chart "Global fullfillment" type: series size:{1, 0.5} position: {0, 0} {
 				data "Fullfillment" value: totalFullfillment color: #blue;
+				
+				data "CopFullfillment" value: copFullfillment color: #red;
+				data "ThiefFullfillment" value: thiefFullfillment color: #black;
+				data "PartyGoerFullfillment" value: partyGoerFullfillment color: #orange;
+				data "ConcertGoerFullfillment" value: concertGoerFullfillment color: #green;
+				data "ShopperFullfillment" value: shopperFullfillment color: #yellow;
 			}
 		}
 	}
