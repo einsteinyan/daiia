@@ -178,6 +178,8 @@ species people skills: [fipa, moving] {
 		wanderingTime <- 50;
 		lowestPrice <- 1.0;
 		currentGoal <- 'find_purpose';
+		totalFullfillment <- totalFullfillment - fullfillment; 
+		fullfillment <- 0.0;
 		shouldReset <- false;
 	}
 	
@@ -185,7 +187,7 @@ species people skills: [fipa, moving] {
 		if(!alternateDestination) {
 			if (type = 'Cop' or type = 'Thief') {
 				do wander speed: 5.0;
-				write 'wanderiiiiiiiiiiiiiiiiiing!';
+				write name + ' is wandering';
 				currentGoal <- 'wander';
 			}
 			else if (type = 'ConcertGoer'){
@@ -303,57 +305,82 @@ species people skills: [fipa, moving] {
 		}	
 		else {
 			// Reset flags 
-			// myColor <- color;
-			// color <- #white;
 			write "Goal achieved for " + name + ", moving on to do something else.";
+			totalFullfillment <- totalFullfillment - fullfillment; 
+			fullfillment <- fullfillment - 0.1;
+			totalFullfillment <- totalFullfillment + fullfillment; 
 			shouldReset <- true;
 		}
 	}
 	
 	
 	reflex beginInteracting when: atTarget and currentGoal = 'socialise' {
-		list neighbours <- (self neighbors_at 5) of_species (species (self));
-		if(!empty(neighbours)) {
-			loop person over: neighbours {
-				if(person.sociability > 0.5) {
-					person.myColor <- #red;
-					person.isInteracting <- true;
-					person.atTarget <- false;
-					person.fullfillment <- person.fullfillment + 0.1;
-				}			
-			}
-			if (sociability > 0.5) {				
+		if (sociability > 0.25) {
+			list neighbours <- (self neighbors_at 5) of_species (species (self));
+			if(!empty(neighbours)) {
+				loop person over: neighbours {
+					if(person.sociability > 0.5) {
+						person.myColor <- #red;
+						person.isInteracting <- true;
+						person.atTarget <- false;
+					}			
+				}
 				myColor <- #red;
 				isInteracting <- true;
 				atTarget <- false;	
-				fullfillment <- fullfillment + 0.1;
 			}
 		}
 	}
 	
 	reflex interactWithOthers when: isInteracting {
 		if(stayTime > 0) {
-//			agent closestAgent <- agent_closest_to(self);
-			if (type = 'ConcertGoer') {
-				write name + "is interacting";
-			}
-			else if (type = 'partyGoer') {
-				write name + "is interacting";
-			}
-			else if (type = 'shopper') {
-				write name + "is interacting";
-			}	
 			stayTime <- stayTime - 1;
-			totalFullfillment <- totalFullfillment + 0.1;
 		}
 		else {
+			agent closestAgent <- agent_closest_to(self);
+			ask closestAgent {
+				if (isInteracting and myself.isInteracting) {
+					if (targetPoint = barLocation) {
+						if(abs(drinkQuotient - myself.drinkQuotient) > 0.5) {
+							write name + " is fighting over drinks with " + myself.name;
+							fullfillment <- fullfillment - 0.1;
+							myself.fullfillment <- myself.fullfillment - 0.1;
+						}
+					}
+					if (targetPoint = restaurantLocation) {
+						if(abs(eatQuotient - myself.eatQuotient) < 0.5) {
+							write name + " is enjoying food  with " + myself.name;
+							fullfillment <- fullfillment + 0.1;
+							myself.fullfillment <- myself.fullfillment + 0.1;
+						}
+					}
+					if (targetPoint = concertLocation) {
+						if(abs(musicTaste - myself.musicTaste) < 0.5) {
+							write name + " is bonding over music with " + myself.name;
+							fullfillment <- fullfillment - 0.1;
+							myself.fullfillment <- myself.fullfillment + 0.1;
+						}
+					}
+					goalAchieved <- true;
+					isInteracting <- false;
+				}
+//				if (type = 'ConcertGoer') {
+//					write name + "is interacting";
+//				}
+//				else if (type = 'partyGoer') {
+//					write name + "is interacting";
+//				}
+//				else if (type = 'shopper') {
+//					write name + "is interacting";
+//				}		
+			}
+			totalFullfillment <- totalFullfillment + fullfillment;
 			goalAchieved <- true;
 			isInteracting <- false;
 		}
 	}
 	
 	// Withdraw money
-	
 	reflex withdrawMoney when: currentGoal = 'goto_atm' and atTarget and !goalAchieved{
 		if (stayTime > 0) {
 			totalMoney <- totalMoney - money;
@@ -378,6 +405,7 @@ species people skills: [fipa, moving] {
 			} 
 		}
 		decidedStayLength <- true;
+		totalFullfillment <- totalFullfillment - concertGoerFullfillment;
 		concertGoerFullfillment <- concertGoerFullfillment + 0.1;
 		totalFullfillment <- totalFullfillment + concertGoerFullfillment;
 	}
@@ -403,6 +431,7 @@ species people skills: [fipa, moving] {
 				if (sociability > 0.75) {
 					string place <- myself.eatQuotient > myself.drinkQuotient ? 'bar' : 'restaurant';
 					write myself.name + " is partying with " + name + " at the " + place;
+					totalFullfillment <- totalFullfillment - partyGoerFullfillment;
 					partyGoerFullfillment <- partyGoerFullfillment + 0.1;
 					totalFullfillment <- totalFullfillment + partyGoerFullfillment;
 				} 
@@ -461,6 +490,7 @@ species people skills: [fipa, moving] {
 		write name + " has bought at item for " + lowestPrice;
 		buyItem <- false;
 		goalAchieved <- true;
+		totalFullfillment <- totalFullfillment - fullfillment;
 		fullfillment <- fullfillment + 0.1;
 		totalFullfillment <- totalFullfillment + fullfillment;
 	}
@@ -472,6 +502,7 @@ species people skills: [fipa, moving] {
 		}
 		else {
 			goalAchieved <- true;
+			totalFullfillment <- totalFullfillment - shopperFullfillment;
 			shopperFullfillment <- shopperFullfillment + 0.1;
 			totalFullfillment <- totalFullfillment + shopperFullfillment;
 		}
@@ -499,6 +530,8 @@ species cop parent: people skills: [fipa, moving] {
 				write myself.name + name + "found a thief";
 				thiefCought <- true;
 				myself.thiefSeen <- myself.thiefSeen + 1;
+				myself.fullfillment <- myself.fullfillment + 0.1;
+				fullfillment <- fullfillment - 0.1;
 				copFullfillment <- copFullfillment + 0.1;
 				totalFullfillment <- totalFullfillment + copFullfillment;
 			}
@@ -521,6 +554,8 @@ species thief parent: people skills: [fipa, moving] {
 				write myself.name + name + "steal a guest";
 				money <- money - 0.1;
 				myself.money_stolen <- myself.money_stolen + 0.1;
+				fullfillment <- fullfillment - 0.5;
+				myself.fullfillment <- myself.fullfillment - 0.5;
 				thiefFullfillment <- thiefFullfillment + 0.1;
 				totalFullfillment <- totalFullfillment + thiefFullfillment;
 			}
@@ -566,14 +601,20 @@ experiment simulation type: gui {
 		display simInformation refresh: every(10#cycles) {
 			chart "Global fullfillment" type: series size:{1, 0.5} position: {0, 0} {
 				data "Fullfillment" value: totalFullfillment color: #blue;
-				data "total_money_of_guests" value: totalMoney color: #darkgoldenrod;
-				
-//				data "CopFullfillment" value: copFullfillment color: #red;
-//				data "ThiefFullfillment" value: thiefFullfillment color: #black;
-//				data "PartyGoerFullfillment" value: partyGoerFullfillment color: #orange;
-//				data "ConcertGoerFullfillment" value: concertGoerFullfillment color: #green;
-//				data "ShopperFullfillment" value: shopperFullfillment color: #yellow;
+				data "Expenditure" value: totalMoney color: #darkgoldenrod;			
+				data "CopFullfillment" value: copFullfillment color: #red;
+				data "ThiefFullfillment" value: thiefFullfillment color: #black;
+				data "PartyGoerFullfillment" value: partyGoerFullfillment color: #orange;
+				data "ConcertGoerFullfillment" value: concertGoerFullfillment color: #green;
+				data "ShopperFullfillment" value: shopperFullfillment color: #yellow;
 			}
+			chart "Fullfillment distribution" type: histogram size:{1.0, 0.5} position: {0, 0.5} {
+	    		data "Cop" value: cop count(each.fullfillment > 0) color: #blue;
+	    		data "Thief" value: thief count(each.fullfillment > 0) color: #blue;
+	    		data "ConcertGoers" value: concertGoer count(each.fullfillment > 0) color: #blue;
+	    		data "PartyGoers" value: partyGoer count(each.fullfillment > 0) color: #blue;
+	    		data "Shopper" value: shopper count(each.fullfillment > 0) color: #blue;
+	    	}
 		}
 	}
 }
